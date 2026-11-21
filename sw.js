@@ -1,4 +1,4 @@
-const V="cb-4ba8dca203";
+const V="cb-2906b99754";
 self.addEventListener("install",e=>{self.skipWaiting();});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener("fetch",e=>{const r=e.request; if(r.method!=="GET") return;
