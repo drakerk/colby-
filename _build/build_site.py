@@ -98,7 +98,10 @@ json.dump({"name": NAME, "short_name": SHORT, "start_url": "./", "display": "sta
                      {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}]},
           open(os.path.join(out, "manifest.webmanifest"), "w"))
 
-ver = "cb-" + hashlib.sha256(html.encode()).hexdigest()[:10]
+hh = hashlib.sha256(html.encode())
+for f in pub:  # PDFs/photos are served cache-first, so a changed file must bump the version
+    hh.update(open(os.path.join(src, f), "rb").read())
+ver = "cb-" + hh.hexdigest()[:10]
 open(os.path.join(out, "sw.js"), "w").write("""const V="%s";
 self.addEventListener("install",e=>{self.skipWaiting();});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
