@@ -50,7 +50,7 @@ async function unlock(pw){
   return JSON.parse(new TextDecoder().decode(pt));
 }
 async function go(pw,remember){
-  try{ window.TOUR=await unlock(pw); }catch(e){ return false; }
+  try{ window.TOUR=await unlock(pw); }catch(e){ const alt=pw.trim().toLowerCase(); if(alt===pw) return false; try{ window.TOUR=await unlock(alt); pw=alt; }catch(e2){ return false; } }
   if(remember){ try{localStorage.setItem("cb-pw",pw)}catch(e){} }
   if(window.TOUR.api && window.makeHostedClaude) window.claude=window.makeHostedClaude(window.TOUR.api);
   document.getElementById("lock").remove(); window.startApp(); return true;
