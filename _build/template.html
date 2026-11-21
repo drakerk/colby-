@@ -725,27 +725,26 @@ function daySheet(d){
     if(sch.some(s=>!s.t)) h+=`<div class="note">TBA times are still being advanced with the venue.</div>`;
   } else h+=`<div class="empty">No schedule yet. It'll show here once the run of show comes in.</div>`;
   h+=`</section>`;
-  h+=travelCard(d.date);
-  // People + files
-  h+=`<div class="twocol"><section class="card"><h3>Who's on <small>${people.length} confirmed</small></h3><div class="people">`+
+  let who=`<section class="card"><h3>Who's on <small>${people.length} confirmed</small></h3><div class="people">`+
     people.map(p=>`<div class="person"><div class="av ${p.id==="colby"?"artist":""}">${esc(initials(p.name))}</div><div><div class="nm">${esc(p.name)}</div><div class="rl">${esc(p.role)}</div></div>${p.phone?`<span class="ph">${esc(p.phone)}</span>`:""}</div>`).join("")+
     maybe.map(p=>`<div class="person maybe"><div class="av">${esc(initials(p.name))}</div><div><div class="nm">${esc(p.name)}</div><div class="rl">${esc(p.role)} · maybe</div></div></div>`).join("")+
     `</div></section>`;
-  h+=`<section class="card"><h3>Files <small>${docs.length} PDF${docs.length===1?"":"s"}</small></h3><div class="docs">`+
-    docs.map(f=>`<a class="doc" href="${esc(f.file)}" target="_blank" rel="noopener"><span class="pdf">PDF</span><span><div class="dt">${esc(f.title)}</div><div class="ds">Tap to view</div></span></a>`).join("")+
-    `<div class="drop">Venue tech packs, day sheets and riders land here once they're added to this date's folder.</div></div></section></div>`;
-  // Venue
-  const vrows=[["Address",d.address?`${esc(d.address)}<br><a href="${maps}" target="_blank" rel="noopener">Open in Maps</a>`:null],["Travel",d.travel&&esc(d.travel)],["Parking",vn.parking&&esc(vn.parking)],["Green room",vn.greenRoom&&esc(vn.greenRoom)],["Wifi",vn.wifi&&esc(vn.wifi)],["Hospitality",vn.hospitality&&esc(vn.hospitality)],["Guest list",vn.guests&&esc(vn.guests)],["Production",vn.production&&esc(vn.production)]].filter(r=>r[1]);
-  const contacts=[...(d.contacts||[])];
-  h+=`<div class="twocol"><section class="card"><h3>${d.type==="show"?"Venue":"Details"}</h3>${vrows.length?`<dl class="kv">`+vrows.map(r=>`<div><dt>${r[0]}</dt><dd>${r[1]}</dd></div>`).join("")+`</dl>`:`<div class="empty">No venue details yet.</div>`}</section>`;
-  h+=`<section class="card"><h3>Contacts</h3>${contacts.length?contacts.map(c=>`<div class="contact"><div class="nm">${esc(c.name)}</div><div class="rl">${esc(c.role)}</div>${(c.phone||c.email)?`<div class="ln">${c.phone?`<span>${esc(c.phone)}</span>`:""}${c.email?`<span>${esc(c.email)}</span>`:""}</div>`:""}</div>`).join(""):`<div class="empty">No venue contacts on file for this date.</div>`}</section></div>`;
-  // Matcha near the venue
+  // Matcha, then travel, then details
   if(d.address||d.city){
     const near=d.address||(d.venue+", "+d.city);
     const gm=q=>"https://www.google.com/maps/search/"+encodeURIComponent(q);
     const picks=d.matcha||[];
     h+=`<section class="card matcha"><h3>Matcha nearby <small>${picks.length?"Picks":"Search"}</small></h3>${picks.length?`<div class="mlist">${picks.map(m=>`<a class="mrow" href="${gm(m.name+", "+(m.area||d.city))}" target="_blank" rel="noopener"><span class="mdot"></span><span><div class="nm">${esc(m.name)}</div><div class="rl">${esc([m.area,m.note].filter(Boolean).join(" · "))}</div></span><span class="ar">›</span></a>`).join("")}</div>`:""}${d.matchaNote?`<div class="note">${esc(d.matchaNote)}</div>`:""}<a class="toggle mfind" href="${gm("matcha near "+near)}" target="_blank" rel="noopener">Find matcha near the venue ›</a></section>`;
   }
+  h+=travelCard(d.date);
+  // Venue
+  const vrows=[["Address",d.address?`${esc(d.address)}<br><a href="${maps}" target="_blank" rel="noopener">Open in Maps</a>`:null],["Travel",d.travel&&esc(d.travel)],["Parking",vn.parking&&esc(vn.parking)],["Green room",vn.greenRoom&&esc(vn.greenRoom)],["Wifi",vn.wifi&&esc(vn.wifi)],["Hospitality",vn.hospitality&&esc(vn.hospitality)],["Guest list",vn.guests&&esc(vn.guests)],["Production",vn.production&&esc(vn.production)]].filter(r=>r[1]);
+  const contacts=[...(d.contacts||[])];
+  h+=`<div class="twocol"><section class="card"><h3>${d.type==="show"?"Venue":"Details"}</h3>${vrows.length?`<dl class="kv">`+vrows.map(r=>`<div><dt>${r[0]}</dt><dd>${r[1]}</dd></div>`).join("")+`</dl>`:`<div class="empty">No venue details yet.</div>`}</section>`;
+  h+=`<section class="card"><h3>Contacts</h3>${contacts.length?contacts.map(c=>`<div class="contact"><div class="nm">${esc(c.name)}</div><div class="rl">${esc(c.role)}</div>${(c.phone||c.email)?`<div class="ln">${c.phone?`<span>${esc(c.phone)}</span>`:""}${c.email?`<span>${esc(c.email)}</span>`:""}</div>`:""}</div>`).join(""):`<div class="empty">No venue contacts on file for this date.</div>`}</section></div>`;
+  h+=`<section class="card"><h3>Files <small>${docs.length} PDF${docs.length===1?"":"s"}</small></h3><div class="docs">`+
+    docs.map(f=>`<a class="doc" href="${esc(f.file)}" target="_blank" rel="noopener"><span class="pdf">PDF</span><span><div class="dt">${esc(f.title)}</div><div class="ds">Tap to view</div></span></a>`).join("")+
+    `<div class="drop">Venue tech packs, day sheets and riders land here once they're added to this date's folder.</div></div></section>`;
   if(d.type==="show"){
     const comps=d.comps||null;
     h+=`<section class="card gl" id="gl" data-date="${d.date}"><h3>Guest list <small id="glcount">Loading…</small></h3>
@@ -765,6 +764,7 @@ function daySheet(d){
   if(d.advance && !past){
     h+=`<section class="card advance"><h3>Advance <small>Still open</small></h3><div>${esc(d.advance.status)}</div><div class="owed"><b>Waiting on:</b> ${esc(d.advance.owed)}</div></section>`;
   }
+  h+=who;
   return h+`</div>`;
 }
 
