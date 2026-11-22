@@ -6,6 +6,8 @@ Usage: python3 -I build_site.py <abs src dir> <abs out dir> <password> [api.json
 With deals.json, the management password must be in the MGMT_PW environment
 variable (never in a file). deals.json is encrypted with it and nested inside the
 main encrypted data, so the app password alone can't read it.
+Without MGMT_PW, set KEEP_DEALS_FROM=<current index.html> to carry the existing
+encrypted deals forward unchanged (only the app password is needed).
 
 src must hold only: template.html, data.js, logo-mask.png, photo-hero.jpg,
 photo-wide.jpg and the PDFs. Everything else in src is ignored; every PDF is
@@ -51,6 +53,16 @@ if deals_path:
     if mpw.strip().lower() == pw.strip().lower():
         raise SystemExit("the management password must differ from the app password")
     data["dealsBlob"] = encrypt(json.load(open(deals_path)), mpw)
+elif os.environ.get("KEEP_DEALS_FROM"):
+    # No management password at hand (e.g. the daily refresh): carry the already
+    # encrypted deals forward from the current site. Needs only the app password.
+    old = open(os.environ["KEEP_DEALS_FROM"], encoding="utf-8").read()
+    ob = json.loads(re.search(r"window\.TOURBLOB=(\{.*?\});", old).group(1))
+    okey = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=base64.b64decode(ob["s"]), iterations=ob["n"]).derive(pw.encode())
+    prev = json.loads(AESGCM(okey).decrypt(base64.b64decode(ob["i"]), base64.b64decode(ob["c"]), None))
+    if not prev.get("dealsBlob"):
+        raise SystemExit("KEEP_DEALS_FROM page has no Management section")
+    data["dealsBlob"] = prev["dealsBlob"]
 blob = encrypt(data, pw)
 
 loader = """<script>
