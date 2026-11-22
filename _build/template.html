@@ -8,6 +8,28 @@
 .mrow .rl{font-size:12.5px;color:var(--muted)}
 .mrow .ar{color:var(--muted)}
 .mfind{display:inline-block;margin-top:10px}
+
+/* Management: deals + guest approvals */
+.dealf{display:flex;flex-direction:column;gap:10px;max-width:360px}
+.dealf input{font:inherit;font-size:16px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--raised);color:var(--ink)}
+.dealerr{font-size:14px;color:var(--red)}
+.dealbar{display:flex;gap:8px;margin:0 0 6px}
+.mhead{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:10px 0 -4px}
+.deal .dealhd{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;text-decoration:none;color:inherit;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.deal .dd{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;grid-row:span 2;padding-top:4px}
+.deal .dv{font-family:var(--serif);font-weight:700;letter-spacing:-.02em;font-size:19px;line-height:1.15}
+.deal .dc{font-size:14px;color:var(--muted)}
+.deal .gu{font-weight:700;color:var(--red)}
+.menu.mg{margin:0 0 4px}
+.appr .glitem{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+.appr .glitem:first-of-type{border-top:0}
+.appr .gli-main{flex:1;min-width:0}
+.ap{font:inherit;font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:999px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+.ap-yes{background:var(--ink);color:var(--bg)}
+.ap-no{border-color:var(--red);color:var(--red)}
+.ap-undo{border-color:var(--line);color:var(--muted)}
+.ap:disabled{opacity:.5}
+.st-Denied{background:transparent;color:var(--muted);border:1px solid var(--line);text-decoration:line-through}
 </style>
 <title>colby! Tour Book</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -416,7 +438,7 @@ document.getElementById("upd").textContent=T.updated.toUpperCase();
 let state={view:"home", sel:null, showPast:false, from:"dates", anchor:null};
 try{ const p=localStorage.getItem("cb-showpast"); if(p) state.showPast=p==="1"; }catch(e){}
 
-const VIEWS=["home","dates","travel","guests","files"];
+const VIEWS=["home","dates","travel","guests","files"].concat(T.dealsBlob?["mgmt","deals","approvals"]:[]);
 function readHash(){
   const h=location.hash.slice(1);
   const m=h.match(/^d-(\d{4}-\d{2}-\d{2})(?:-(gl|tv))?$/);
@@ -638,9 +660,10 @@ function homeView(){
     ["dates","Tour dates",`${upcoming.length} upcoming · ${shows.length} show${shows.length===1?"":"s"}`,"dates",true],
     ["travel","Travel",travelCount(),"travel"],
     ["guests","Guest lists",nextShow?`Next: ${nextShow.city.split(",")[0]}`:"","guests"],
-    ["files","Files",`${Object.keys(T.files).length} PDF${Object.keys(T.files).length===1?"":"s"} · stage plot`,"files"]
+    ["files","Files",`${Object.keys(T.files).length} PDF${Object.keys(T.files).length===1?"":"s"} · stage plots`,"files"]
   ];
-  const tabIc=k=>document.querySelector(`.tab[data-tab="${k}"] svg`).outerHTML;
+  if(T.dealsBlob) tiles.push(["mgmt","Management","Deals · guest approvals · locked","lock"]);
+  const tabIc=k=>k==="lock"?LOCK_SVG:document.querySelector(`.tab[data-tab="${k}"] svg`).outerHTML;
   const hz=(T.horizon||[]).length?`<section class="horizon"><h3>On the horizon</h3><div class="note" style="margin-top:0">Not dated yet. These move into Tour dates once they're confirmed.</div><ul>${T.horizon.map(x=>`<li><span>${esc(x.what)}</span><span>${esc(x.when)}</span></li>`).join("")}</ul></section>`:"";
   return `<div class="home-wrap">${heroImg}${hero}<div class="menu">${tiles.map((t,i)=>`<a class="tile ${t[4]?"accent":""}" href="#${t[0]}" style="--i:${i}"><span class="ic">${tabIc(t[3])}</span><span class="ar">›</span><span class="tt">${t[1]}</span><span class="ts" ${t[0]==="travel"?'id="cnt-travel"':""}>${esc(t[2])}</span></a>`).join("")}</div>${hz}</div>`;
 }
@@ -772,7 +795,7 @@ function daySheet(d){
 // ---- Guest list (shared, per date, stored in the artifact's database) ----
 let DB=null, USER=null, ME=null, CANEDIT=false, glUnsub=null, glRows=[], dbTried=false;
 const dbReady=(async()=>{ try{ if(!window.claude) return; DB=await claude.use("db"); USER=await claude.use("user"); if(USER){ ME=await USER.id().catch(()=>null); CANEDIT=!!(USER.canEdit&&USER.canEdit()); } }catch(e){} finally{ dbTried=true; } })();
-const STATUS_ORDER={"Approved":0,"RSVP yes":1,"Requested":2,"Invited":3};
+const STATUS_ORDER={"Approved":0,"RSVP yes":1,"Requested":2,"Invited":3,"Denied":4};
 function glRender(){
   const box=document.getElementById("gllist"); if(!box) return;
   const q=(document.getElementById("gl-q")||{}).value?.toLowerCase()||"";
@@ -786,7 +809,7 @@ function glRender(){
     rs.sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9)||a.name.localeCompare(b.name)).map(r=>{
       const mine=ME&&r.addedBy===ME, can=CANEDIT||mine;
       return `<div class="glitem"><div class="gli-main"><div class="nm">${esc(r.name)}${r.plus?' <span class="plus">+1</span>':""}</div>${r.company?`<div class="rl">${esc(r.company)}</div>`:""}</div>
-        ${CANEDIT?`<button class="st st-${esc((r.status||"").replace(/\s/g,""))}" data-st="${esc(r.id)}" title="Change status">${esc(r.status||"Requested")}</button>`:`<span class="st st-${esc((r.status||"").replace(/\s/g,""))}">${esc(r.status||"Requested")}</span>`}
+        ${CANEDIT&&!T.dealsBlob?`<button class="st st-${esc((r.status||"").replace(/\s/g,""))}" data-st="${esc(r.id)}" title="Change status">${esc(r.status||"Requested")}</button>`:`<span class="st st-${esc((r.status||"").replace(/\s/g,""))}">${esc(r.status||"Requested")}</span>`}
         ${can?`<button class="glx" data-del="${esc(r.id)}" aria-label="Remove ${esc(r.name)}">×</button>`:""}</div>`}).join("")+`</details>`).join("")||'<div class="empty">No matches.</div>';
 }
 async function mountGuestList(){
@@ -820,11 +843,92 @@ async function mountGuestList(){
   };
 }
 
-const TITLES={dates:"Tour dates",travel:"Travel",guests:"Guest lists",files:"Files",day:""};
+// ---- Deals (separately encrypted; only on the password-locked site) ----
+const LOCK_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>';
+let DEALS=null;
+async function unlockDeals(pw){
+  const B=T.dealsBlob, b64=x=>Uint8Array.from(atob(x),c=>c.charCodeAt(0)), enc=new TextEncoder();
+  const base=await crypto.subtle.importKey("raw",enc.encode(pw),"PBKDF2",false,["deriveKey"]);
+  const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(B.s),iterations:B.n,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
+  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(B.i)},key,b64(B.c))));
+}
+const DEAL_ROWS=[["guarantee","Guarantee"],["deposit","Deposit"],["set","Set"],["merch","Merch"],["buyer_provides","Buyer gives"],["artist_provides","We cover"],["radius","Radius"],["contract","Contract"],["status","Status"],["notes","Notes"]];
+const MG_BACK='<a class="back" href="#mgmt">‹ Management</a>';
+function lockForm(){
+  return `<div class="page"><div class="pagehead"><h1>Management</h1><p>Deal memos and guest list approvals. This section has its own password.</p></div><section class="card"><form id="dealf" class="dealf" autocomplete="off"><label for="dealpw" class="eyebrow">Management password</label><input id="dealpw" type="password" autocomplete="off" required><button class="btn" type="submit">Unlock</button><div id="dealerr" class="dealerr" hidden>That password didn't work.</div></form></section></div>`;
+}
+function mgmtView(){
+  if(!DEALS) return lockForm();
+  const pend=apprRows?apprRows.filter(r=>(r.status||"Requested")==="Requested"&&r.date>=todayKey).length:null;
+  const tiles=[["deals","Deals",`Guarantees and terms · ${Object.keys(DEALS.dates).length} dates`],["approvals","Guest approvals",pend===null?"Approve or deny guest requests":pend?`${pend} waiting for a decision`:"Nothing waiting"]];
+  return `<div class="page"><div class="pagehead"><h1>Management</h1><p>For management only. Band and crew don't see this.</p></div>
+  <div class="menu mg">${tiles.map((t,i)=>`<a class="tile" href="#${t[0]}" style="--i:${i}"><span class="ic">${LOCK_SVG}</span><span class="ar">›</span><span class="tt">${t[1]}</span><span class="ts" ${t[0]==="approvals"?'id="cnt-appr"':""}>${esc(t[2])}</span></a>`).join("")}</div>
+  <div class="dealbar"><button class="btn sec" id="deallock" type="button">Lock</button></div></div>`;
+}
+function dealsView(){
+  if(!DEALS) return lockForm();
+  const items=sorted.filter(d=>DEALS.dates[d.date]&&(state.showPast||d.date>=todayKey));
+  const groups={}; items.forEach(d=>{const t=pd(d.date);const g=MONTHS[t.getMonth()]+" "+t.getFullYear();(groups[g]=groups[g]||[]).push(d)});
+  return `<div class="detail">${MG_BACK}<div class="page"><div class="pagehead"><h1>Deals</h1><p>${esc(DEALS.commission)} Terms from the CAA deal memos and offers, as of ${esc(DEALS.updated)}.</p></div>
+  <div class="dealbar"><button class="btn sec" id="past" type="button">${state.showPast?"Hide past dates":"Show past dates"}</button></div>
+  ${Object.entries(groups).map(([g,list])=>`<h2 class="mhead">${esc(g)}</h2>${list.map(d=>{ const x=DEALS.dates[d.date]; const t=pd(d.date);
+    return `<section class="card deal"><a class="dealhd" href="#d-${d.date}"><span class="dd">${esc(t.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}))}</span><span class="dv">${esc(d.venue)}</span><span class="dc">${esc(d.city)}</span></a><dl class="kv">${DEAL_ROWS.filter(([k])=>x[k]).map(([k,l])=>`<div><dt>${l}</dt><dd${k==="guarantee"?' class="gu"':""}>${esc(x[k])}</dd></div>`).join("")}</dl></section>`; }).join("")}`).join("")}</div></div>`;
+}
+// ---- Guest approvals: every show's guest requests in one place ----
+let apprRows=null, apprUnsub=null, apprAll=false;
+function approvalsView(){
+  if(!DEALS) return lockForm();
+  return `<div class="detail">${MG_BACK}<div class="page"><div class="pagehead"><h1>Guest approvals</h1><p>Every guest request from band and crew, by show. Approve or deny each one; the person who added them sees the answer on the day sheet.</p></div>
+  <div class="dealbar"><button class="btn sec" id="apprall" type="button">${apprAll?"Show only waiting":"Show decided too"}</button></div>
+  <div id="apprlist"><div class="empty">Loading guest requests…</div></div></div></div>`;
+}
+function apprRender(){
+  const box=document.getElementById("apprlist"); if(!box) return;
+  if(!apprRows){ return; }
+  const upcoming=apprRows.filter(r=>r.date>=todayKey);
+  const rows=upcoming.filter(r=>apprAll||(r.status||"Requested")==="Requested");
+  if(!rows.length){ box.innerHTML=`<div class="empty">${upcoming.length?"No requests waiting. Every guest has an answer.":"No guest requests yet."}</div>`; return; }
+  const byD={}; rows.forEach(r=>{(byD[r.date]=byD[r.date]||[]).push(r)});
+  box.innerHTML=Object.keys(byD).sort().map(k=>{ const d=(byDate[k]||[])[0]||{venue:"",city:""}; const t=pd(k);
+    const list=byD[k].sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9)||a.name.localeCompare(b.name));
+    return `<section class="card deal appr"><a class="dealhd" href="#d-${k}"><span class="dd">${esc(t.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}))}</span><span class="dv">${esc(d.venue)}</span><span class="dc">${esc(d.city)} · ${list.length} ${list.length===1?"guest":"guests"}</span></a>
+    ${list.map(r=>{ const st=r.status||"Requested";
+      return `<div class="glitem"><div class="gli-main"><div class="nm">${esc(r.name)}${r.plus?' <span class="plus">+1</span>':""}</div><div class="rl">${esc([r.company,r.category].filter(Boolean).join(" · "))}</div></div>
+      ${st==="Requested"?`<button class="ap ap-yes" data-ap="${esc(r.id)}" data-to="Approved">Approve</button><button class="ap ap-no" data-ap="${esc(r.id)}" data-to="Denied">Deny</button>`:`<span class="st st-${esc(st.replace(/\s/g,""))}">${esc(st)}</span><button class="ap ap-undo" data-ap="${esc(r.id)}" data-to="Requested">Undo</button>`}</div>`; }).join("")}</section>`; }).join("");
+}
+async function mountApprovals(){
+  if(apprUnsub){ try{apprUnsub()}catch(e){} apprUnsub=null; }
+  await dbReady;
+  const box=document.getElementById("apprlist"), cnt=document.getElementById("cnt-appr");
+  if(!DB){ if(box) box.innerHTML='<div class="empty">Guest lists aren\'t connected on this copy of the app.</div>'; return; }
+  if(!box&&!cnt) return;
+  const col=DB.collection("guests");
+  apprUnsub=col.onSnapshot(s=>{ apprRows=s.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.name&&r.date);
+      if(document.getElementById("apprlist")) apprRender();
+      const c=document.getElementById("cnt-appr"); if(c){ const n=apprRows.filter(r=>(r.status||"Requested")==="Requested"&&r.date>=todayKey).length; c.textContent=n?`${n} waiting for a decision`:"Nothing waiting"; } },
+    e=>{ if(box) box.innerHTML='<div class="empty">Guest requests couldn\'t load right now. Check your connection.</div>'; });
+  const ab=document.getElementById("apprall"); if(ab) ab.onclick=()=>{ apprAll=!apprAll; ab.textContent=apprAll?"Show only waiting":"Show decided too"; apprRender(); };
+  if(box) box.onclick=async e=>{ const b=e.target.closest("[data-ap]"); if(!b) return;
+    const r=apprRows&&apprRows.find(x=>x.id===b.dataset.ap); if(!r) return;
+    b.disabled=true; const prev=r.status; r.status=b.dataset.to; apprRender();
+    try{ await col.doc(r.id).update({status:b.dataset.to}); }catch(err){ r.status=prev; apprRender(); } };
+}
+function mountMgmt(){
+  const f=document.getElementById("dealf");
+  if(f){ let saved=null; try{saved=sessionStorage.getItem("cb-mgmt")}catch(e){}
+    const tryPw=async(pw,remember)=>{ try{ DEALS=await unlockDeals(pw); if(remember){try{sessionStorage.setItem("cb-mgmt",pw)}catch(e){}} render(); return true; }catch(e){ return false; } };
+    if(saved){ tryPw(saved,false).then(ok=>{ if(!ok){ try{sessionStorage.removeItem("cb-mgmt")}catch(e){} } }); }
+    f.onsubmit=async e=>{ e.preventDefault(); const ok=await tryPw(document.getElementById("dealpw").value,true); if(!ok) document.getElementById("dealerr").hidden=false; };
+    return; }
+  const lk=document.getElementById("deallock"); if(lk) lk.onclick=()=>{ DEALS=null; apprRows=null; try{sessionStorage.removeItem("cb-mgmt")}catch(e){} render(); };
+  if(state.view==="mgmt"||state.view==="approvals") mountApprovals();
+}
+
+const TITLES={dates:"Tour dates",travel:"Travel",guests:"Guest lists",files:"Files",mgmt:"Management",deals:"Deals",approvals:"Guest approvals",day:""};
 function render(){
   const app=document.getElementById("app");
   const v=state.view;
-  app.innerHTML= v==="day"?detail(): v==="dates"?datesView(): v==="travel"?travelView(): v==="guests"?guestsView(): v==="files"?filesView(): homeView();
+  app.innerHTML= v==="day"?detail(): v==="dates"?datesView(): v==="travel"?travelView(): v==="guests"?guestsView(): v==="files"?filesView(): v==="mgmt"?mgmtView(): v==="deals"?dealsView(): v==="approvals"?approvalsView(): homeView();
   document.body.classList.toggle("home",v==="home");
   document.body.classList.toggle("nocloud",!window.claude);
   document.getElementById("barttl").textContent=TITLES[v]||"";
@@ -832,6 +936,7 @@ function render(){
   document.querySelectorAll(".tab").forEach(t=>{ if(t.dataset.tab===tabFor) t.setAttribute("aria-current","page"); else t.removeAttribute("aria-current"); });
   if(v==="day") mountGuestList(); else if(glUnsub){ try{glUnsub()}catch(e){} glUnsub=null; }
   if(v==="travel") mountTravelView();
+  if(v==="mgmt"||v==="deals"||v==="approvals") mountMgmt(); else if(apprUnsub){ try{apprUnsub()}catch(e){} apprUnsub=null; }
   bindRows(app);
   const bk=document.getElementById("back"); if(bk) bk.onclick=()=>go(state.from||"dates");
   const pb=document.getElementById("past");
@@ -907,12 +1012,12 @@ window.makeHostedClaude=function(api){
     return j;
   };
   const subs=new Set();
-  const tableOf=p=>{ if(p==="travel") return {table:"Travel"}; const m=p.match(/^guests\/(\d{4}-\d{2}-\d{2})\/entries$/); if(m) return {table:"Guests",date:m[1]}; throw new Error("bad path "+p); };
+  const tableOf=p=>{ if(p==="travel") return {table:"Travel"}; if(p==="guests") return {table:"Guests",all:true}; const m=p.match(/^guests\/(\d{4}-\d{2}-\d{2})\/entries$/); if(m) return {table:"Guests",date:m[1]}; throw new Error("bad path "+p); };
   const refresh=path=>subs.forEach(s=>{ if(s.path===path) s.pull(); });
   const norm=r=>{ const o=Object.assign({},r); if("plus" in o) o.plus=Number(o.plus)||0; return o; };
   const db={collection(path){ const t=tableOf(path); return {
     onSnapshot(ok,err){
-      const s={path,pull:async()=>{ try{ const j=await call({action:"list",table:t.table,date:t.date}); ok({docs:j.rows.map(r=>({id:r.id,data:()=>norm(r)}))}); }catch(e){ err&&err(e); } }};
+      const s={path,pull:async()=>{ try{ let rows; if(t.all){ const ds=[...new Set(((window.TOUR||{}).days||[]).filter(d=>d.type==="show").map(d=>d.date))]; rows=(await Promise.all(ds.map(dt=>call({action:"list",table:"Guests",date:dt}).then(j=>j.rows)))).flat(); } else rows=(await call({action:"list",table:t.table,date:t.date})).rows; ok({docs:rows.map(r=>({id:r.id,data:()=>norm(r)}))}); }catch(e){ err&&err(e); } }};
       subs.add(s); s.pull();
       const iv=setInterval(()=>{ if(!document.hidden) s.pull(); },30000);
       return ()=>{ subs.delete(s); clearInterval(iv); };

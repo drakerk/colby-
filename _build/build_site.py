@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Build the password-locked colby! tour book site for GitHub Pages.
 
-Usage: python3 -I build_site.py <abs src dir> <abs out dir> <password> [api.json]
+Usage: python3 -I build_site.py <abs src dir> <abs out dir> <password> [api.json|-] [deals.json]
+
+With deals.json, the management password must be in the MGMT_PW environment
+variable (never in a file). deals.json is encrypted with it and nested inside the
+main encrypted data, so the app password alone can't read it.
 
 src must hold only: template.html, data.js, logo-mask.png, photo-hero.jpg,
 photo-wide.jpg and the PDFs. Everything else in src is ignored; every PDF is
@@ -21,7 +25,8 @@ NAME, SHORT = "colby! Tour Book", "colby!"
 ITER = 250000
 
 src, out, pw = sys.argv[1:4]
-api = json.load(open(sys.argv[4])) if len(sys.argv) > 4 else None
+api = json.load(open(sys.argv[4])) if len(sys.argv) > 4 and sys.argv[4] != "-" else None
+deals_path = sys.argv[5] if len(sys.argv) > 5 else None
 os.makedirs(out, exist_ok=True)
 
 tpl = open(os.path.join(src, "template.html"), encoding="utf-8").read()
@@ -32,11 +37,21 @@ if api:
     data["api"] = {"url": api["url"], "token": api["token"]}
 
 # ---- encrypt ----
-salt, iv = secrets.token_bytes(16), secrets.token_bytes(12)
-key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=ITER).derive(pw.encode())
-ct = AESGCM(key).encrypt(iv, json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode(), None)
-blob = {"s": base64.b64encode(salt).decode(), "i": base64.b64encode(iv).decode(), "n": ITER,
-        "c": base64.b64encode(ct).decode()}
+def encrypt(obj, password):
+    salt, iv = secrets.token_bytes(16), secrets.token_bytes(12)
+    key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=ITER).derive(password.encode())
+    ct = AESGCM(key).encrypt(iv, json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode(), None)
+    return {"s": base64.b64encode(salt).decode(), "i": base64.b64encode(iv).decode(), "n": ITER,
+            "c": base64.b64encode(ct).decode()}
+
+if deals_path:
+    mpw = os.environ.get("MGMT_PW", "")
+    if not mpw:
+        raise SystemExit("set MGMT_PW to build the Management section")
+    if mpw.strip().lower() == pw.strip().lower():
+        raise SystemExit("the management password must differ from the app password")
+    data["dealsBlob"] = encrypt(json.load(open(deals_path)), mpw)
+blob = encrypt(data, pw)
 
 loader = """<script>
 window.TOURBLOB=%s;
