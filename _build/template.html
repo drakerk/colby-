@@ -30,6 +30,15 @@
 .ap-undo{border-color:var(--line);color:var(--muted)}
 .ap:disabled{opacity:.5}
 .st-Denied{background:transparent;color:var(--muted);border:1px solid var(--line);text-decoration:line-through}
+
+/* Pull to refresh */
+html,body{overscroll-behavior-y:contain}
+.ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:40;width:38px;height:38px;margin-left:-19px;border-radius:50%;background:var(--raised);color:var(--ink);border:1px solid var(--line);box-shadow:0 4px 14px rgba(23,26,40,.16);display:grid;place-items:center;opacity:0;transform:translateY(-60px);pointer-events:none}
+.ptr svg{width:20px;height:20px}
+.ptr.ready svg{color:var(--red)}
+.ptr.spin svg{animation:ptrspin .8s linear infinite}
+@keyframes ptrspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ptr.spin svg{animation:none}}
 </style>
 <title>colby! Tour Book</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1041,6 +1050,24 @@ window.makeHostedClaude=function(api){
   const caps={db,user,sample,assets};
   return {use:async n=>caps[n]||null};
 };
+</script>
+<div class="ptr" id="ptr" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></div>
+<script>
+// Pull to refresh: drag down from the top of any screen to load the latest data.
+(function(){
+  const el=document.getElementById("ptr"), MAX=110, GO=72;
+  let y0=null, d=0, busy=false;
+  const blocked=()=>busy||document.getElementById("lock")||document.querySelector(".pdfv:not([hidden]),.imgv:not([hidden])")||window.scrollY>0;
+  const show=v=>{ const t=Math.min(v,MAX); el.style.transition="none"; el.style.opacity=Math.min(1,t/GO); el.style.transform=`translateY(${t-40}px) rotate(${t*3}deg)`; el.classList.toggle("ready",t>=GO); };
+  const hide=()=>{ el.style.transition="transform .25s ease, opacity .25s ease"; el.style.opacity=0; el.style.transform="translateY(-60px)"; el.classList.remove("ready"); };
+  addEventListener("touchstart",e=>{ y0=(e.touches.length===1&&!blocked())?e.touches[0].clientY:null; d=0; },{passive:true});
+  addEventListener("touchmove",e=>{ if(y0===null) return; d=(e.touches[0].clientY-y0)*0.5; if(window.scrollY>0||d<=0){ d=0; hide(); return; } show(d); },{passive:true});
+  addEventListener("touchend",()=>{ if(y0===null) return; y0=null;
+    if(d>=GO){ busy=true; el.classList.add("spin"); el.style.transition="transform .2s ease"; el.style.transform="translateY(30px)";
+      const go=()=>location.reload();
+      (navigator.serviceWorker&&navigator.serviceWorker.getRegistration?navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{}):Promise.resolve()).then(()=>setTimeout(go,250));
+    } else hide(); d=0; },{passive:true});
+})();
 </script>
 <!--LOADER-->
 </body></html>
